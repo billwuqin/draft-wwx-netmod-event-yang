@@ -110,7 +110,7 @@
       (ECA) policy management. The ECA policy YANG module provides the ability
       to delegate some network management functions to the server which can
       take simple and instant action when a trigger condition on the system
-      state is met. </t>
+      state is met.</t>
     </abstract>
   </front>
 
@@ -259,12 +259,13 @@
 
         <t>In ECA, two type of policy variables are defined, pv-source
         variable and pv-result variable. pv-source variable represents an
-        XPath result, which contains one of four data types: Boolean, Number,
-        String, and Node Set while pv-result variable represents the value of
-        the result of an Policy Variable evaluation. <list style="symbols">
-            <t>A pv-source is always config=true.</t>
+        XPath expression input, which contains one of four data types:
+        Boolean, Number, String, and Node Set while pv-result variable
+        represents the value of the result of an Policy Variable evaluation.
+        <list style="symbols">
+            <t>A pv-source is always config = true.</t>
 
-            <t>A pv-result is always config=false.</t>
+            <t>A pv-result is always config = false.</t>
 
             <t>A single anydata cannot be used for all values since it is only
             allowed to contain child nodes. Separate scalar and nodeset values
@@ -288,12 +289,8 @@
             <t>write (modify configuration data in the datastore with the PV's
             content/value);</t>
 
-            <t>insert (PV's content into a same type list);</t>
-
-            <t>iterate (copy into PV one by one same type list elements)</t>
-
-            <t>function calls in a form of F(arg1,arg2,...), where F is an
-            identity of a function from extendable function library,
+            <t>function calls or RPC in a form of F(arg1,arg2,...), where F is
+            an identity of a function from extendable function library,
             arg1,arg2,etc are PVs respectively, the function's input
             parameters, with the result returned in result policy
             variable.</t>
@@ -308,6 +305,7 @@
             <artwork>     +--rw policy-variables
      |  +--rw policy-variable* [name]
      |     +--rw name                            string
+     |     +--rw type                            identityref
      |     +--rw (xpath-value-choice)?
      |        +--:(policy-source)
      |        |  +--rw (pv-source)
@@ -334,35 +332,36 @@
         of changes associated with one of multiple operational state data
         objects in the network device.</t>
 
-        <t>Each ECA Event has the following attributes:<list style="symbols">
+        <t>Each ECA Event can be classified into server event, datastore
+        event, timer event, diagnostics event and has the following common
+        attributes:<list style="symbols">
             <t>event-name, the name of ECA event;</t>
 
             <t>event-type, typical examples of ECA event type include server
             event, datastore event, timer event and diagnostic event.</t>
+          </list>For server event, the following additional attributes are
+        defined:<list style="symbols">
+            <t>event-stream,typical example of event stream is NETCONF
+            stream.</t>
 
-            <t>event-stream,in case of server event.</t>
+            <t>event-module, the name of YANG module associated with the ECA
+            event.</t>
 
-            <t>event-module, in case of server event.</t>
+            <t>event, it is event stream conveyed to the server.</t>
+          </list>For datastore event, the following additional attributes are
+        defined:<list>
+            <t>datastore, the name of the datastore, typical example of
+            datastore is running, operational state datastores.</t>
 
-            <t>event-name, in case of server event.</t>
+            <t>data-path, in the form of XPATH expression.</t>
 
-            <t>event, it is event stream conveyed to the server in case of
-            server event.</t>
-
-            <t>datastore, in case of datastore event.</t>
-
-            <t>data-path, in case of datastore event.</t>
-
-            <t>data, it is event notification defined in a YANG module, in
-            case of datastore event.</t>
-
-            <t>period, in case of timer event.</t>
+            <t>data, it is event notification defined in a YANG module.</t>
           </list></t>
 
         <t>A client may define an event of interest by making use of YANG PUSH
         subscription. Specifically, the client may configure an ECA event
         according to the ECA model specifying the event's name, as well as the
-        name of corresponding PUSH subscrition. In this case, the server is
+        name of corresponding PUSH subscription. In this case, the server is
         expected to: <list style="symbols">
             <t>Register the event recording its name and using the referred
             PUSH subsription trigger as definition of the event firing
@@ -402,9 +401,6 @@
      |        |  +--rw data-path?         string
      |        |  +--rw data?              &lt;anydata&gt;
      |        +--:(timer-event)
-     |        |  +--rw time-schedule!
-     |        |     +--rw period?   centiseconds
-     |        |     +--rw count?    uint16
      |        +--:(diagnostics-event)</artwork>
         </figure>
       </section>
@@ -449,6 +445,29 @@
               server SHOULD provide the USER variable as NACM is
               implemented.</t>
 
+              <t>XPath variables can be used in 2 main ways in an
+              expression:<figure>
+                  <artwork>1) anchor of a path-expr
+
+      $node-set-variable/child1/nested2
+
+2) right-hand side of a primary-expr
+
+     /foo[name = $scalar-variable]</artwork>
+                </figure></t>
+
+              <t>It cannot be used in the middle of a path-expr<figure>
+                  <artwork>/interfaces/$node-set-variable/child1/nested2     // NOT OK</artwork>
+                </figure></t>
+
+              <t>Since a variable is a primary expression it can be used in
+              XPath expression constructions anywhere a primary-expr is
+              allowed<figure>
+                  <artwork>   $nodeset-variable1 | $ nodeset-variable2
+
+   ($min-length + $avg-length) &lt; $last-length</artwork>
+                </figure></t>
+
               <t>The values of all available policy variables are updated by
               the server (if required) before the XPath expression is
               evaluated. The variable binding value MUST NOT change while the
@@ -457,8 +476,7 @@
               resolve to the same value in each instance.<figure>
                   <artwork>
 Example:  "/test1[name=$badfan] and /test2[name=$badfan]"
-     The same value of 'badfan' is expected in each instance.
-</artwork>
+     The same value of 'badfan' is expected in each instance.</artwork>
                 </figure></t>
 
               <t>If a variable reference cannot be resolved because no policy
@@ -466,30 +484,6 @@ Example:  "/test1[name=$badfan] and /test2[name=$badfan]"
               evaluation, then an eca-exception notification SHOULD be
               generated, and the XPath evaluation MUST be terminated with an
               error.</t>
-
-              <t>Example:<figure>
-                  <artwork>[TBD: Need to determine what XPath parsers support.
- Need to support simple expressions like
-    PV(x) = $A
-    PV(x) = $A + $B
-
-May need to wrapper in function calls
-
-    PV(x) = number($A)
-    PV(x) = number($A) + number($B)
-
-TBD: How to do conditional assignments
-
-   if nmda-supported()
-     PV(top) = /interfaces
-   else
-     PV(top) = /interfaces-state
-   end
-
-Then an XPath expression can use
-
-   $top/interface/name</artwork>
-                </figure></t>
             </list></t>
         </section>
 
@@ -531,8 +525,10 @@ Then an XPath expression can use
           occur while ECA logis is being evaluated will cause the server to
           generate an eca-exception notification.</t>
 
-          <t>TBD: Does an exception cause the ECA entry to be disabled
-          automatically?</t>
+          <t>If the ECA is scheduled one time, an exception will cause the ECA
+          entry to be disabled automatically. If the ECA is scheduled
+          periodically, ECA entry execution will be skip in the current period
+          interval and continue in the next period interval.</t>
 
           <figure>
             <artwork>   identity eca-exception-reason {
@@ -548,14 +544,22 @@ Then an XPath expression can use
         The variable binding cannot be resolved in the XPath
         evaluation.";
    }
+   identity func-invoke-error {
+     base eca-exception-reason;
+     description
+       "The function call is invoked and return false output.";
+    }
+   identity rpc-call-error {
+     base eca-exception-reason;
+     description
+       "The rpc call is invoked and return false output.";
+    }
 
-   // TBD: define exceptions as needed
-
+   // Additional exceptions can be added as needed
     notification eca-exception {
       description
         "This notification is sent when some error occurs
-         while the server is processing ECA logic.
-         [TBD: lots more detail and parameters]";
+         while the server is processing ECA logic.";
        leaf reason {
          type eca-exception-reason;
        }
@@ -576,7 +580,7 @@ Then an XPath expression can use
 
             <t>stopping current ECA;</t>
 
-            <t>invoking another ECA;</t>
+            <t>invoking the same ECA recursively;</t>
           </list></t>
 
         <t>Three points are worth noting:<list style="symbols">
@@ -610,20 +614,27 @@ Then an XPath expression can use
 
         <t>The model structure for the actions is shown below: <figure>
             <artwork>     +--rw actions
+     |  +--rw time-schedule!
+     |  |  +--rw period?   centiseconds
      |  +--rw action* [name]
      |     +--rw name                   string
      |     +--rw action-element* [name]
      |     |  +--rw name                      string
      |     |  +--rw action-type?              identityref
      |     |  +--rw (action-operation)?
-     |     |     +--:(notify-operation)
-     |     |        +--rw notify-operation
-     |     |           +--rw name?              string
-     |     |           +--rw policy-variable* [name]
-     |     |              +--rw name    string
-     |     +--rw time-schedule!
-     |     |  +--rw period?   centiseconds
-     |     |  +--rw count?    uint16</artwork>
+     |     |     +--:(action)
+     |     |     |  +--rw next-period         boolean
+     |     |     |  +--rw action-name?
+     |     |     |          -&gt; /gnca/actions/action/name
+     |     |     +--:(function-call)
+     |     |     |  +--rw function-call
+     |     |     |     +--rw func-name       leafref
+     |     |     |     +--rw policy-source   leafref
+     |     |     |     +--rw policy-result   leafref
+     |     |     |  +--:(rpc-operation)
+     |     |     |  |  +--rw rpc-operation
+     |     |     |  |     +--rw rpc-name?          string
+     |     |     |  |     +--rw nc-action-xpath?   string</artwork>
           </figure></t>
       </section>
 
@@ -643,9 +654,10 @@ Then an XPath expression can use
             TRUE</t>
           </list></t>
 
-        <t>TBD: how different ECAs do not impact each other if they share PVs
-        and other components is not in the scope of this document at this
-        moment.</t>
+        <t>Note that this document currently focuses on one event with
+        multiple conditions and actions case. How different ECAs do not impact
+        each other if they share PVs and other components is not in the scope
+        of this document at this moment.</t>
 
         <section anchor="ecalib" title="ECA XPath Function Library (ECALIB)">
           <t>A set of common event PVs need to be set for every invocation of
@@ -675,19 +687,50 @@ For event-type = "datastore"
  
 The data is defined to be a container with the requested data as child nodes
 
-  $data/interface[type=$gigabit-eth] // (node-set is an array of data nodes, usually siblings)
+  $data/interface[type=$gigabit-eth] // (node-set is an array of data nodes, usually 
+  siblings)
 
-A standard sustained-event func call should be defined to specify how many seconds the
- XPath expression needs to be true to consider the function result true
-    
-// check every 5 seconds up to 60 seconds
-  sustained-event("$event/child[name=$some-global-var] &gt; 10", 5, 12)
+A standard func call should be defined to specify operation on policy variables 
+and xpath expression and store func result.
+//Increment count by one each time increment-func is invoked
+boolean function increment-func(number count)
 
-function boolean sustained-event (string expr, number interval, number count)
-        test expression 'expr' once per 'interval'. Keep testing once per interval until
-        false result reached or 'count' number of interval on specific interface has been 
-        tested true.Return true if condition tested true for count intervals; Returns 
-        false otherwise</artwork>
+//Decrement count by one each time decrement-func is invoked
+boolean function decrement-func(number count)
+
+//Exit the loop to monitor specific event
+boolean function exit-func()
+
+//Continue the loop to monitor the specific event
+boolean function continue-func()
+
+//set iteration variable as true if count variable is equal to or greater than 1
+//set iteration variable as false if count variable is zero
+boolean function match-func (string expr,number count,boolean iteration)  
+ 
+// check every 5 seconds until the same event occurs 2 times
+  sustained-event("$event/child[type=$some-global-var]/descendant[$leaf1 &gt; 10]", 5, 2)
+
+boolean function sustained-event (string expr, number interval, number count)
+        test expression 'expr' once per 'interval'. Keep testing once per 
+        interval until true result reached, i.e., both xpath expression is 
+        evaluated to true and 'count' number of interval on specific data 
+        object has been tested true 
+        (e.g., the same event occurs 'count' times )Return true if condition 
+        tested true for count intervals; Returns false otherwise;
+
+// check the event record every 5 seconds and filter the event record with 
+   constraint of a specific descendant node to the event record root node
+   filtered-event("$event/child/descendant[$leaf1 &gt; 10]", "$event",5)
+
+boolean function filtered-event (string input-expr,string output-expr,number 
+        interval)test expression 'expr'once per 'interval' and generate event 
+        record output represented by 'output-expr' based on 'input-expr'. 
+        Note than 'output-expr'and 'input-expr'share the same root node;   
+
+A standard rpc should be defined to specify the operation on the event stream
+// suppress the event stream corresponding to XPATH expression
+boolean rpc event-duplication-suppress(string expr)             </artwork>
           </figure>
 
           <t>The ECA XPath function library is expected to grow over time and
@@ -696,14 +739,17 @@ function boolean sustained-event (string expr, number interval, number count)
           supported.<figure>
               <artwork>     +--rw eca-func-libs
         +--rw eca-function* [func-name]
-           +--rw func-name    string
-           +--rw eca* [eca-name]
-              +--rw eca-name    -&gt; /gncd/ecas/eca/name</artwork>
+        |   +--rw func-name    string
+        +--rw eca-rpc* [rpc-name]
+        |  +--rw rpc-name     string
+        +--rw eca-name    -&gt; /gncd/ecas/eca/name</artwork>
             </figure></t>
 
-          <t>TBD: How can ECA access specific datastores? Currently no NMDA
-          support for config=true values in &lt;operational&gt; is provided.
-          Access to &lt;candidate&gt; datastore is not possible.</t>
+          <t>Note that ECA accesses specific datastores in the same way as
+          YANG Push [RFC8641]. The difference is condition expression is
+          introduced to further filter nodes in the node set and the policy
+          variable is introduced to keep the intermediate states during the
+          interaction between the local client and the server.</t>
         </section>
       </section>
     </section>
@@ -716,6 +762,7 @@ function boolean sustained-event (string expr, number interval, number count)
      +--rw policy-variables
      |  +--rw policy-variable* [name]
      |     +--rw name                            string
+     |     +--rw type                            identityref
      |     +--rw (xpath-value-choice)?
      |        +--:(policy-source)
      |        |  +--rw (pv-source)
@@ -747,9 +794,6 @@ function boolean sustained-event (string expr, number interval, number count)
      |        |  +--rw data-path?         string
      |        |  +--rw data?              &lt;anydata&gt;
      |        +--:(timer-event)
-     |        |  +--rw time-schedule!
-     |        |     +--rw period?   centiseconds
-     |        |     +--rw count?    uint16
      |        +--:(diagnostics-event)
      +--rw conditions
      |  +--rw condition* [name]
@@ -758,60 +802,64 @@ function boolean sustained-event (string expr, number interval, number count)
      |        +--:(xpath)
      |           +--rw condition-xpath?   string
      +--rw actions
+     |  +--rw time-schedule!
+     |  |  +--rw period?   centiseconds
      |  +--rw action* [name]
      |     +--rw name              string
      |     +--rw action-element* [name]
      |     |  +--rw name                      string
      |     |  +--rw action-type?              identityref
      |     |  +--rw (action-operation)?
-     |     |     +--:(notify-operation)
-     |     |        +--rw notify-operation
-     |     |           +--rw name?              string
-     |     |           +--rw policy-variable* [name]
-     |     |              +--rw name    string
-     |     +--rw time-schedule!
-     |        +--rw period?   centiseconds
-     |        +--rw count?    uint16
+     |     |     +--:(action)
+     |     |     |  +--rw next-period         boolean
+     |     |     |  +--rw action-name?
+     |     |     |          -&gt; /gnca/actions/action/name
+     |     |  |  +--:(function-call)
+     |     |  |  |  +--rw function-call
+     |     |  |  |     +--rw func-name       leafref
+     |     |  |  |     +--rw policy-source   leafref
+     |     |  |  |     +--rw policy-result   leafref
+     |     |  |  +--:(rpc-operation)
+     |     |  |  |  +--rw rpc-operation
+     |     |  |  |     +--rw rpc-name?          string
+     |     |  |  |     +--rw nc-action-xpath?   string
      +--rw ecas
      |  +--rw eca* [name]
      |     +--rw name                string
      |     +--rw username            string
      |     +--rw event-name          string
      |     +--rw policy-variable* [name]
-     |     |  +--rw name                            string
-     |     |  +--rw (xpath-value-choice)?
-     |     |  |  +--:(policy-source)
-     |     |  |  |  +--rw (pv-source)
-     |     |  |  |     +--:(xpath-expr)
-     |     |  |  |     |  +--rw xpath-expr?         yang:xpath1.0
-     |     |  |  |     +--:(scalar-constant)
-     |     |  |  |     |  +--rw scalar-constant?    string
-     |     |  |  |     +--:(nodeset-constant)
-     |     |  |  |        +--rw nodeset-constant?   &lt;anydata&gt;
-     |     |  |  +--:(policy-result)
-     |     |  |     +--rw (pv-result)
-     |     |  |        +--:(scalar-value)
-     |     |  |        |  +--rw scalar-value?       string
-     |     |  |        +--:(nodeset-value)
-     |     |  |           +--rw nodeset-value?      &lt;anydata&gt;
+     |     |  +--rw name                            leafref
      |     |  +--rw is-static?                      boolean
      |     +--rw condition-action* [name]
      |     |  +--rw name         string
-     |     |  +--rw condition?   -&gt; /gncd/conditions/condition/name
+     |     |  +--rw condition*   -&gt; /gncd/conditions/condition/name
      |     |  +--rw action?      -&gt; /gncd/actions/action/name
      |     +---x start
      |     +---x stop
      |     +---x next-action
      +--rw eca-func-libs
         +--rw eca-function* [func-name]
-           +--rw func-name    string
-           +--rw eca* [eca-name]
-              +--rw eca-name    -&gt; /gncd/ecas/eca/name
+        |  +--rw func-name    string
+        +--rw eca-rpc* [rpc-name]
+        |  +--rw rpc-name     string
+        +--rw eca-name    -&gt; /gncd/ecas/eca/name
 
   notifications:
     +---n eca-exception
-       +--ro reason?   identityref
-</artwork>
+    |  +--ro reason?   identityref
+    +---n custom-notification
+       +--ro eventTime       yang:date-and-time
+       +--ro event-type?     identityref
+       +--ro (type-choice)?
+       |   +--:(server-event)
+       |   |  +--ro event-stream?      string
+       |   |  +--ro event-module?      string
+       |   |  +--ro policy-result      leafref
+       |   +--:(datastore-event)
+       |   |  +--ro datatore?          string
+       |   |  +--ro data-path?         string
+       |   |  +--ro policy-result      leafref</artwork>
         </figure></t>
     </section>
 
@@ -828,11 +876,10 @@ function boolean sustained-event (string expr, number interval, number count)
     prefix yang;
   }
   import ietf-netconf-acm {
-    prefix nacm;
-    reference
-      "RFC8341: Network Configuration Access Control Model";
+   prefix nacm;
+   reference
+    "RFC8341: Network Configuration Access Control Model";
   }
-
   organization
     "IETF Network Configuration (NETCONF) Working Group";
   contact
@@ -892,8 +939,7 @@ function boolean sustained-event (string expr, number interval, number count)
        the input variables for sustained-event include string
        expr, number interval, number count. Keep testing
        expression 'expr'once per interval until false result
-       reached or 'count' number of interval on specific interface
-       has been tested true.Return true if condition tested true
+       reached.Return true if condition tested true
        for count intervals; Returns false otherwise.";
   }
 
@@ -904,7 +950,7 @@ function boolean sustained-event (string expr, number interval, number count)
        and dst policy arugment.";
   }
 
-  identity mius {
+  identity minus {
     description
       "Identity for standard minus function call, the input
        variables for plus function call include src policy argument
@@ -925,22 +971,10 @@ function boolean sustained-event (string expr, number interval, number count)
        and dst policy arugment.";
   }
 
-  identity content-moving-operation-type {
-    description
-      "Possible values are:
-       copy, iterate, insert.";
-  }
-
   identity action-type {
     description
       "Possible values are:
-       action, content-move, function-call, rpc, notify.";
-  }
-
-  identity policy-variable-type {
-    description
-      "Possible values are:
-       boolean, int32, int64, uint32, uint64, string, etc.";
+       action, function-call, rpc.";
   }
 
   identity event-type {
@@ -971,20 +1005,20 @@ function boolean sustained-event (string expr, number interval, number count)
     description
       "Identity for diagnostics event.";
   }
-
+  
   identity eca-exception-reason {
-    description
-      "Base of all values for the 'reason' leaf in the
+     description
+       "Base of all values for the 'reason' leaf in the
        eca-exception notification.";
-  }
+   }
 
-  identity varbind-unknown {
-    base eca-exception-reason;
-    description
-      "The requested policy variable binding is not defined.
-       The variable binding cannot be resolved in the XPath
-       evaluation.";
-  }
+   identity varbind-unknown {
+     base eca-exception-reason;
+     description
+       "The requested policy variable binding is not defined.
+        The variable binding cannot be resolved in the XPath
+        evaluation.";
+   }
 
   typedef centiseconds {
     type uint32;
@@ -1023,82 +1057,80 @@ function boolean sustained-event (string expr, number interval, number count)
       "The operational status of an ECA execution.";
   }
 
-  grouping scalar-value {
-    leaf scalar-value {
-      type string;
-      description
-        "Represents an XPath simple value that has an
-         XPath type of Boolean, String, or Number.
-         This value will be converted to an XPath type,
-         as needed.
+      grouping scalar-value {
+      leaf scalar-value {
+        type string;
+        description
+          "Represents an XPath simple value that has an
+           XPath type of Boolean, String, or Number.
+           This value will be converted to an XPath type,
+           as needed.
 
-         A YANG value is encoded as a string using the same
-         rules as the 'default' value for the data type.
+           A YANG value is encoded as a string using the same
+           rules as the 'default' value for the data type.
 
-         An eca-exception notification is generated if a scalar
-         XPath value is used in a path expression, where a
-         node-set is expected. Normally XPath will treat this result
-         as an empty node-set, but this is an ECA programming error.";
+           An eca-exception notification is generated if a scalar
+           XPath value is used in a path expression, where a
+           node-set is expected. Normally XPath will treat this result
+           as an empty node-set, but this is an ECA programming error.";
+      }
     }
-  }
 
-  grouping nodeset-value {
-    anydata nodeset-value {
-      description
-        "Represents an XPath node set. A 'node-set' anydata node
-         with no child data nodes represents an empty node-set.
-         Each child node in within this anydata structure
-         represents a subtree that is present in the XPath
-         node-set.
+    grouping nodeset-value {
+      anydata nodeset-value {
+         description
+           "Represents an XPath node set. A 'node-set' anydata node
+            with no child data nodes represents an empty node-set.
+            Each child node in within this anydata structure
+            represents a subtree that is present in the XPath
+            node-set.
 
-         An XPath node-set is not required to contain a top-level
-         YANG data node.  It is not required to contain an entire
-         complete subtree.
+            An XPath node-set is not required to contain a top-level
+            YANG data node.  It is not required to contain an entire
+            complete subtree.
 
-         It is am implementation-specific manner how a
-         representation of YANG 'anydata' nodes are mapped
-         to specific YANG module schema definitions.";
+            It is am implementation-specific manner how a
+            representation of YANG 'anydata' nodes are mapped
+            to specific YANG module schema definitions.";
+      }
     }
-  }
+      grouping scalar-constant {
+      leaf scalar-constant {
+        type string;
+        description
+          "Represents an XPath simple value that has an
+           XPath type of Boolean, String, or Number.
+           This value will be converted to an XPath type,
+           as needed.
 
-  grouping scalar-constant {
-    leaf scalar-constant {
-      type string;
-      description
-        "Represents an XPath simple value that has an
-         XPath type of Boolean, String, or Number.
-         This value will be converted to an XPath type,
-         as needed.
+           A YANG value is encoded as a string using the same
+           rules as the 'default' value for the data type.
 
-         A YANG value is encoded as a string using the same
-         rules as the 'default' value for the data type.
-
-         An eca-exception notification is generated if a scalar
-         XPath value is used in a path expression, where a
-         node-set is expected. Normally XPath will treat this result
-         as an empty node-set, but this is an ECA programming error.";
+           An eca-exception notification is generated if a scalar
+           XPath value is used in a path expression, where a
+           node-set is expected. Normally XPath will treat this result
+           as an empty node-set, but this is an ECA programming error.";
+      }
     }
-  }
 
-  grouping nodeset-constant {
-    anydata nodeset-constant {
-      description
-        "Represents an XPath node set. A 'node-set' anydata node
-         with no child data nodes represents an empty node-set.
-         Each child node in within this anydata structure
-         represents a subtree that is present in the XPath
-         node-set.
+    grouping nodeset-constant {
+      anydata nodeset-constant {
+         description
+           "Represents an XPath node set. A 'node-set' anydata node
+            with no child data nodes represents an empty node-set.
+            Each child node in within this anydata structure
+            represents a subtree that is present in the XPath
+            node-set.
 
-         An XPath node-set is not required to contain a top-level
-         YANG data node.  It is not required to contain an entire
-         complete subtree.
+            An XPath node-set is not required to contain a top-level
+            YANG data node.  It is not required to contain an entire
+            complete subtree.
 
-         It is am implementation-specific manner how a
-         representation of YANG 'anydata' nodes are mapped
-         to specific YANG module schema definitions.";
+            It is am implementation-specific manner how a
+            representation of YANG 'anydata' nodes are mapped
+            to specific YANG module schema definitions.";
+      }
     }
-  }
-
   grouping pv-source {
     choice pv-source {
       mandatory true;
@@ -1119,6 +1151,7 @@ function boolean sustained-event (string expr, number interval, number count)
 
          The 'nodeset-constant' anydata structure is used to
          represent a constant XPath node-set.";
+
       leaf xpath-expr {
         type yang:xpath1.0;
         description
@@ -1127,6 +1160,7 @@ function boolean sustained-event (string expr, number interval, number count)
            the XPath execution environment used to process this
            object.";
       }
+
       case scalar-constant {
         uses scalar-constant;
       }
@@ -1148,6 +1182,7 @@ function boolean sustained-event (string expr, number interval, number count)
 
          The 'nodeset-value' anydata structure is used to represent
          an XPath node-set result.";
+
       case scalar-value {
         uses scalar-value;
       }
@@ -1156,7 +1191,7 @@ function boolean sustained-event (string expr, number interval, number count)
       }
     }
   }
-
+  
   grouping policy-variable-attributes {
     description
       "Defining the policy variable attributes, including name, type
@@ -1174,15 +1209,21 @@ function boolean sustained-event (string expr, number interval, number count)
         "The type of a policy variable may be either a common
          primative type like boolean or a type from existing
          schema node referenced by an XPath string.";
-      case policy-source {
-        uses pv-source;
+      /*case scalar {
+        uses scalar-value;
       }
-      case policy-result {
-        uses pv-result;
-      }
-    }
+      case nodeset {
+        uses nodeset-value;
+      }*/
+    case policy-source {
+    uses pv-source;
+   }
+   case policy-result {
+     uses pv-result;
+   }
+    }  
   }
-
+  
   grouping action-element-attributes {
     description
       "Grouping of action element attributes.";
@@ -1196,7 +1237,70 @@ function boolean sustained-event (string expr, number interval, number count)
     choice action-operation {
       description
         "The operation choices that an ECA Action can take.";
-      case notify-operation {
+   case action {
+         leaf next-period {
+            type boolean;
+            description
+              "invoke the same eca recursively if the next period 
+              is set to true.";
+          }
+            leaf action-name {
+             type leafref {
+               path "/gncd/actions/action/name";
+             }
+             description
+               "The operation is to execute a configured ECA Action.";
+           }
+         } // action
+    case function-call {
+           container function-call {
+             description
+               "The operation is to call a function, which is of one of
+                a few basic predefined types, such as plus, minus,
+                multiply, devide, or remainder.";
+             leaf function-name {
+               type string;
+               description
+                 "The name of function call to be called";
+              }
+       leaf policy-source {
+        type leafref {
+         path "/gncd/policy-variables/policy-variable/name";
+      }
+     description
+      "The policy source.";
+    }
+    leaf policy-result {
+    type leafref {
+      path "/gncd/policy-variables/policy-variable/name";
+     }
+     description
+      "The policy result.";
+    }
+           }
+         } // function-call
+         case rpc-operation {
+           container rpc-operation {
+             description
+               "The operation is to call an RPC, which is defined by
+                a YANG module supported by the server.";
+             leaf rpc-name {
+               type string;
+               description
+                 "The name of the YANG RPC or YANG action to be
+                  called.";
+             }
+             leaf nc-action-xpath {
+               type string;
+               description
+                 "The location where the YANG action is defined.
+                  This is used if and only if a YANG action is called.
+                  This leaf is not set when a YANG RPC is called.";
+             }
+           }
+         } // rpc-operation
+
+      /*case notify-operation {
         container notify-operation {
           description
             "The operation is to send a YANG notification.";
@@ -1218,7 +1322,7 @@ function boolean sustained-event (string expr, number interval, number count)
             }
           }
         }
-      }
+      }*/
     }
   }
 
@@ -1235,13 +1339,6 @@ function boolean sustained-event (string expr, number interval, number count)
         description
           "Duration of time that should occur between periodic
            push updates, in units of 0.01 seconds.";
-      }
-      leaf count {
-        type uint16;
-        description
-          "specify the count number of interval that has to pass before
-           successive adaptive periodic push update records for the same
-           subscription are generated for a receiver.";
       }
     }
   }
@@ -1283,12 +1380,13 @@ function boolean sustained-event (string expr, number interval, number count)
         }
         leaf-list policy-variable {
           type leafref {
-            path "/gncd/policy-variables/policy-variable/name";
-          }
+            path "/gncd/policy-variables/"
+              + "policy-variable/name";
+             }
           description
-            "global policy variables, which
-             are shared by all ECA scripts.";
-        }
+           "global policy variables, which
+            are shared by all ECA scripts.";
+           }
         leaf-list local-policy-variable {
           type leafref {
             path "/gncd/ecas/eca/policy-variable/name";
@@ -1298,6 +1396,7 @@ function boolean sustained-event (string expr, number interval, number count)
              are kept within an ECA instance, and appears/
              disappears with start/stop of the ECA execution.";
         }
+
         choice type-choice {
           description
             "The type of an event, including server event and datastore event.";
@@ -1340,13 +1439,7 @@ function boolean sustained-event (string expr, number interval, number count)
                             associated with the data path.";
             }
           }
-          case timer-event {
-            uses time-schedule-container {
-              description
-                "Specifying the time schedule to trigger the event.
-                 If not specified, the event is not triggered.";
-            }
-          }
+          case timer-event;
           case diagnostics-event;
         }
       }
@@ -1383,6 +1476,13 @@ function boolean sustained-event (string expr, number interval, number count)
     container actions {
       description
         "Container of ECA Actions.";
+        uses time-schedule-container {
+          description
+            "Specifying the time schedule to execute this ECA
+             Action.
+             If not specified, the ECA Action is executed one time immediately
+             when it is called.";
+        }
       list action {
         key "name";
         description
@@ -1405,13 +1505,6 @@ function boolean sustained-event (string expr, number interval, number count)
           }
           uses action-element-attributes;
         }
-        uses time-schedule-container {
-          description
-            "Specifying the time schedule to execute this ECA
-             Action.
-             If not specified, the ECA Action is executed immediately
-             when it is called.";
-        }
       }
     }
     container ecas {
@@ -1426,12 +1519,12 @@ function boolean sustained-event (string expr, number interval, number count)
           description
             "A string name to uniquely identify an ECA globally.";
         }
-        leaf username {
-          type string;
-          mandatory true;
-          description
-            "Name of the user for the session.";
-        }
+     leaf username {
+      type string;
+         mandatory true;
+         description
+           "Name of the user for the session.";
+       }
         leaf event-name {
           type string;
           mandatory true;
@@ -1444,7 +1537,11 @@ function boolean sustained-event (string expr, number interval, number count)
           description
             "A list of ECA local Policy Variables (PVs), with a
              string name as the entry key.";
-          uses policy-variable-attributes;
+          leaf name {
+          type leafref {
+            path "/gncd/policy-variables/policy-variable/name";
+         } 
+       }
           leaf is-static {
             type boolean;
             description
@@ -1457,23 +1554,22 @@ function boolean sustained-event (string expr, number interval, number count)
         }
         list condition-action {
           key "name";
-          ordered-by user;
+            ordered-by user;
           description
             "A list of Condition-Actions, which are configured
              conditions each with associated actions to be executed
-             if the condition is evaluated to TRUE.
-             [TBD Does the server do all the actions where the condition 
-             is true? Does it stop after one condition-action is completed?
-             How is it possible to require multiple conditions to be true
-             in order to do 1 action? How will conditions be reusable
-             and not giant cut-and-paste combination of other entries?]";
+             if the condition is evaluated to TRUE. The server can do 
+             multiple action when the condition is true. If the next-period
+             is set to true, condition-action will be executed recursively.
+             It is also possbile to require multiple conditions to be true
+             in order to do one action.";
           leaf name {
             type string;
             description
               "A string name uniquely identify a Condition-Action
                within this ECA.";
           }
-          leaf condition {
+          leaf-list condition {
             type leafref {
               path "/gncd/conditions/condition/name";
             }
@@ -1503,45 +1599,109 @@ function boolean sustained-event (string expr, number interval, number count)
         }
       }
     }
-    container eca-func-libs {
+ container eca-func-libs {
+  description
+    "Container of ECA Function Libraries.";
+  list eca-function {
+    key func-name;
+    description
+     "A list of ECA standard function.";
+    leaf func-name {
+     type string;
+    description
+    "A string name to uniquely identify an ECA standard function.";
+   }
+}
+  list rpc-function {
+    key rpc-name;
+    description
+     "A list of ECA standard function.";
+    leaf rpc-name {
+   type string;
+   description
+     "A string name to uniquely identify an ECA standard RPC.";
+    }
+  }
+   leaf eca-name {
+    type leafref {
+     path "/gncd/ecas/eca/name";
+    }
+    description
+     "The reference to a configured ECA.";
+    }
+   } // eca-scripts
+  }
+  
+    notification eca-exception {
       description
-        "Container of ECA Function Libraries.";
-      list eca-function {
-        key "func-name";
-        description
-          "A list of ECA standard function.";
-        leaf func-name {
-          type string;
+        "This notification is sent when some error occurs
+         while the server is processing ECA logic.";
+       leaf reason {
+         type identityref {
+         base eca-exception-reason;
+         }
+       }
+    }
+ notification custom-notification {
+      description
+        "This notification is sent when some error occurs
+         while the server is processing ECA logic.";
+       leaf eventTime {
+         type yang:date-and-time;
           description
-            "A string name to uniquely identify an ECA standard function.";
-        }
-        list eca {
-          key "eca-name";
+           "The event occurrence time";
+       }
+      leaf event-type {
+          type identityref {
+            base event-type;
+          }
           description
-            "A list of ECAs contained in this ECA function libraries.";
-          leaf eca-name {
-            type leafref {
-              path "/gncd/ecas/eca/name";
+            "The type of the event.";
+      }
+       choice type-choice {
+          description
+            "The type of an event, including server event and datastore event.";
+          case server-event {
+            leaf event-stream {
+              type string;
+              description
+                "The name of a subscribed stream .";
             }
-            description
-              "The reference to a configured ECA.";
+            leaf event-module {
+              type string;
+              description
+                "The name of YANG data module associated with the subscribed
+                 stream.";
+            }
+            anydata event {
+              description
+                "This anydata value MUST Contain the absolute XPath
+                 expression identifying the element path to the node that is
+                 associated with subscribed stream.";
+            }
+          }
+          case datastore-event {
+            leaf datatore {
+              type string;
+              description
+                "The name of a datatore from which applications
+                 subscribe to updates.";
+            }
+            leaf data-path {
+              type string;
+              description
+                "The absolute XPath expression identifying the
+                 element path to the node that is associated with
+                 subscribed stream..";
+            }
+            anydata data {
+              description
+                "This anydata value MUST Contain the node that is
+                 associated with the data path.";
+            }
           }
         }
-      }
     }
-  }
-
-  notification eca-exception {
-    description
-      "This notification is sent when some error occurs
-       while the server is processing ECA logic.
-       [TBD: lots more detail and parameters]";
-    leaf reason {
-      type identityref {
-        base eca-exception-reason;
-      }
-    }
-  }
 }</artwork>
       </figure>
 
@@ -1786,134 +1946,247 @@ what is stored in Policy Variable B, it can be expressed as follows:
  +----------------------------+ </artwork>
       </figure>
 
-      <t>The management system designs a new ECA policy based on monitored
+      <t> The management system designs a new ECA policy based on monitored
       objects in ietf-interfaces module that support threshold checking and
-      pushes down the ECA policy to control interface behavior in the managed
+      pushes down the ECA policy to control interface behaviour in the managed
       device that supports NETCONF/RESTCONF protocol operation, i.e.,scan all
-      interfaces for a certain type every 5 seconds up to 60 seconds and check
-      the counters or status, return an array of interface entries (XPath
-      node-set) that match the search. The XML example snippet is shown as
-      below:</t>
+      interfaces for a certain type every 5 seconds and check the counters or
+      status, return an array of interface entries (XPath node-set) that match
+      the search and suppress reporting of duplicated events if all conditions
+      are evaluated into true. The XML example snippet is shown as below:</t>
 
       <figure>
         <artwork>&lt;gnca&gt;
- &lt;policy-variables&gt;
-  &lt;policy-variable&gt;
-    &lt;name&gt;event-name&lt;/name&gt;
-    &lt;scalar-constant&gt;interface-self-monitoring&lt;/scalar-constant&gt;
-  &lt;/policy-variable&gt;
-  &lt;policy-variable&gt;
-    &lt;name&gt;event-type&lt;/name&gt;
-    &lt;scalar-constant&gt;server-event&lt;/scalar-constant&gt;
-  &lt;/policy-variable&gt;
-  &lt;policy-variable&gt;
-    &lt;name&gt;event-stream&lt;/name&gt;
-    &lt;scalar-constant&gt;NETCONF&lt;/scalar-constant&gt;
-  &lt;/policy-variable&gt;
-  &lt;policy-variable&gt;
-    &lt;name&gt;event-module&lt;/name&gt;
-    &lt;scalar-constant&gt;ietf-interfacs&lt;/scalar-constant&gt;
-  &lt;/policy-variable&gt;
-  &lt;policy-variable&gt;
-    &lt;name&gt;event&lt;/name&gt;
-    &lt;xpath-expr&gt;if:interfaces/if:interface[if:type=if:gigabitEthernet]&lt;/xpath-expr&gt;
-  &lt;/policy-variable&gt;
- &lt;/policy-variables&gt;
- &lt;events&gt;
-    &lt;event&gt;
-     &lt;event-name&gt;interface-self-monitoring&lt;/name&gt;
-     &lt;event-type&gt;server-event&lt;/event-type&gt;
-     &lt;event-stream&gt;NETCONF&lt;/event-stream&gt;
-     &lt;event-module&gt;ietf-interfacs&lt;/event-module&gt;
-     &lt;event&gt;if:interfaces/if:interface[if:type=if:gigabitEthernet]&lt;/event&gt;
-   &lt;/event&gt;
- &lt;/events&gt;
- &lt;conditions&gt;
-  &lt;condition&gt;
-    &lt;name&gt;if-monitoring-condition&lt;/name&gt;
-    &lt;condition-xpath&gt;event/statistics/in-errors &gt; 1000 &lt;/condition-xpath&gt;
-  &lt;/condition&gt;
- &lt;/conditions&gt;
- &lt;actions&gt;
-  &lt;action&gt;
-    &lt;name&gt;if-matched-statistics&lt;/name&gt;
-    &lt;action-element&gt;
-    &lt;/action-element&gt;
-    &lt;time-schedule&gt;
-      &lt;period&gt;5&lt;/period&gt;
-      &lt;count&gt;12&lt;/count&gt;
-    &lt;/time-schedule&gt;
-  &lt;/action&gt;
- &lt;/actions&gt;
- &lt;ecas&gt;
-  &lt;eca&gt;
-    &lt;name&gt;interface-eca-handling&lt;/name&gt;
-    &lt;event-name&gt;interface-self-monitoring&lt;/event-name&gt;
-    &lt;condition-action&gt;
-     &lt;name&gt;sustained-event&lt;/name&gt;
-     &lt;condition&gt;if-monitoring-condition&lt;/condition&gt;
-     &lt;action&gt;if-matched-statistics&lt;/action&gt;
-   &lt;/condition-action&gt;
- &lt;/eca&gt;
- &lt;/ecas&gt;
-&lt;eca-func-libs&gt;
-&lt;eca-function&gt;
-&lt;func-name&gt;sustained-event&lt;/func-name&gt;
-&lt;eca&gt;
-&lt;eca-name&gt;interface-eca-handling&lt;/eca-name&gt;
-&lt;/eca&gt;
-&lt;/eca-function&gt;
-&lt;/eca-func-libs&gt;
-&lt;/gnca&gt;
-
-&lt;notification xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"&gt;
-  &lt;eventTime&gt;2016-11-21T13:51:00Z&lt;/eventTime&gt;
-  &lt;eca-report&gt;
-          &lt;interfaces
-           xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces"
-           xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type"&gt;
-         &lt;interface&gt;
-           &lt;name&gt;GE0&lt;/name&gt;
-           &lt;type&gt;ianaift:gigabitEthernet&lt;/type&gt;
-           &lt;enabled&gt;false&lt;/enabled&gt;
-         &lt;/interface&gt;
-
-         &lt;interface&gt;
-           &lt;name&gt;GE1&lt;/name&gt;
-           &lt;type&gt;ianaift:gigabitEthernet&lt;/type&gt;
-           &lt;enabled&gt;true&lt;/enabled&gt;
-         &lt;/interface&gt;
-
-         &lt;interface&gt;
-           &lt;name&gt;GE2&lt;/name&gt;
-           &lt;type&gt;ianaift:gigabitEthernet&lt;/type&gt;
-           &lt;enabled&gt;true&lt;/enabled&gt;
-         &lt;/interface&gt;
-  &lt;/eca-report&gt;
-&lt;/notification&gt;
-
-&lt;notification xmlns="urn:ietf:params:xml:ns:netconf:notification:1.0"&gt;
-  &lt;eventTime&gt;2016-11-21T13:53:00Z&lt;/eventTime&gt;
-  &lt;eca-execution&gt;
-  &lt;oper-status&gt;completed&lt;/oper-status&gt;
-     &lt;event-name&gt;interface-self-monitoring&lt;/name&gt;
-     &lt;event-type&gt;server-event&lt;/event-type&gt;
-     &lt;event-stream&gt;NETCONF&lt;/event-stream&gt;
-     &lt;event-module&gt;ietf-interfacs&lt;/event-module&gt;
-     &lt;period&gt;5&lt;/period&gt;
-     &lt;count&gt;12&lt;/count&gt;
-  &lt;/eca-execution&gt;
-&lt;/notification&gt;</artwork>
+    &lt;policy-variables&gt;
+        &lt;policy-variable&gt;
+            &lt;name&gt;event-repeat-count&lt;/name&gt;
+            &lt;scalar-constant&gt;0&lt;/scalar-constant&gt;
+        &lt;/policy-variable&gt;
+        &lt;policy-variable&gt;
+            &lt;name&gt;interface-statistics-event&lt;/name&gt;
+            &lt;xpath-expr&gt;if:interfaces/if:interface[if:type=if:gigabitEthernet,
+     if:oper-status=down]&lt;/xpath-expr&gt;
+        &lt;/policy-variable&gt;
+    &lt;/policy-variables&gt;
+    &lt;events&gt;
+        &lt;event&gt;
+            &lt;event-name&gt;interface-self-monitoring&lt;/event-name&gt;
+            &lt;event-type&gt;server-event&lt;/event-type&gt;
+            &lt;event-stream&gt;NETCONF&lt;/event-stream&gt;
+            &lt;event-module&gt;ietf-interfaces&lt;/event-module&gt;
+            &lt;event&gt;if:interfaces/if:interface[if:type=if:gigabitEthernet]&lt;/event&gt;
+        &lt;/event&gt;
+    &lt;/events&gt;
+    &lt;conditions&gt;
+        &lt;condition&gt;
+            &lt;name&gt;if-monitoring-condition1&lt;/name&gt;
+            &lt;condition-xpath&gt;event[if:oper-status=down]&lt;/condition-xpath&gt;
+        &lt;/condition&gt;
+        &lt;condition&gt;
+            &lt;name&gt;if-monitoring-condition2&lt;/name&gt;
+            &lt;condition-xpath&gt;event[if:oper-status!=down]&lt;/condition-xpath&gt;
+        &lt;/condition&gt;
+        &lt;condition&gt;
+            &lt;name&gt;if-monitoring-condition3&lt;/name&gt;
+            &lt;condition-xpath&gt;event-repeat-count &gt;1 &lt;/condition-xpath&gt;
+        &lt;/condition&gt;
+        &lt;condition&gt;
+            &lt;name&gt;if-monitoring-condition4&lt;/name&gt;
+            &lt;condition-xpath&gt;event-repeat-count &lt;1 &lt;/condition-xpath&gt;
+        &lt;/condition&gt;
+    &lt;/conditions&gt;
+    &lt;actions&gt;
+        &lt;time-schedule&gt;
+            &lt;period&gt;5&lt;/period&gt;
+        &lt;/time-schedule&gt;
+        &lt;action&gt;
+            &lt;name&gt;if-matched-statistics1&lt;/name&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;event-filter-action&lt;/name&gt;
+                &lt;func-name&gt;filtered-event&lt;/func-name&gt;
+                &lt;policy-source&gt;interface-statistics-event&lt;/policy-source&gt;
+                &lt;policy-result&gt;event&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;increment-action&lt;/name&gt;
+                &lt;func-name&gt;increment-function&lt;/func-name&gt;
+                &lt;policy-source&gt;event-repeat-count&lt;/policy-source&gt;
+                &lt;policy-result&gt;event-repeat-count&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;suppress-action&lt;/name&gt;
+                &lt;rpc-operation&gt;
+                    &lt;name&gt;suppress-notification&lt;/name&gt;
+                &lt;/rpc-operation&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;continue-check-action&lt;/name&gt;
+                &lt;func-name&gt;match-function&lt;/func-name&gt;
+                &lt;policy-source&gt;interface-statistics-event&lt;/policy-source&gt;
+                &lt;policy-source&gt;event-repeat-count&lt;/policy-source&gt;
+                &lt;policy-result&gt;next-period&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+        &lt;/action&gt;
+        &lt;action&gt;
+            &lt;name&gt;if-matched-statistics2&lt;/name&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;event-filter-action&lt;/name&gt;
+                &lt;func-name&gt;filtered-event&lt;/func-name&gt;
+                &lt;policy-source&gt;interface-statistics-event&lt;/policy-source&gt;
+                &lt;policy-result&gt;event&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;increment-action&lt;/name&gt;
+                &lt;func-name&gt;increment-function&lt;/func-name&gt;
+                &lt;policy-source&gt;event-repeat-count&lt;/policy-source&gt;
+                &lt;policy-result&gt;event-repeat-count&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;continue-check-action&lt;/name&gt;
+                &lt;func-name&gt;match-function&lt;/func-name&gt;
+                &lt;policy-source&gt;interface-statistics-event&lt;/policy-source&gt;
+                &lt;policy-source&gt;event-repeat-count&lt;/policy-source&gt;
+                &lt;policy-result&gt;next-period&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+        &lt;/action&gt;
+        &lt;action&gt;
+            &lt;name&gt;if-matched-statistics3&lt;/name&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;decrement-action&lt;/name&gt;
+                &lt;func-name&gt;decrement-function&lt;/func-name&gt;
+                &lt;policy-source&gt;event-repeat-count&lt;/policy-source&gt;
+                &lt;policy-result&gt;event-repeat-count&lt;/policy-result&gt;
+            &lt;/action-element&gt;
+            &lt;action-element&gt;
+                &lt;name&gt;exit-action&lt;/name&gt;
+                &lt;func-name&gt;exit-func&lt;/func-name&gt;
+            &lt;/action-element&gt;
+        &lt;/action&gt;
+    &lt;/actions&gt;
+    &lt;ecas&gt;
+        &lt;eca&gt;
+            &lt;name&gt;interface-eca-handling&lt;/name&gt;
+            &lt;user-name&gt;Bob&lt;/user-name&gt;
+            &lt;event-name&gt;interface-self-monitoring&lt;/event-name&gt;
+            &lt;condition-action&gt;
+                &lt;name&gt;smart-filter1&lt;/name&gt;
+                &lt;condition&gt;if-monitoring-condition1&lt;/condition&gt;
+                &lt;condition&gt;if-monitoring-condition3&lt;/condition&gt;
+                &lt;action&gt;
+                    &lt;name&gt;if-matched-statistics1&lt;/name&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;event-filter-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;increment-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;suppress-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;continue-check-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                &lt;/action&gt;
+            &lt;/condition-action&gt;
+            &lt;condition-action&gt;
+                &lt;name&gt;smart-filter2&lt;/name&gt;
+                &lt;condition&gt;if-monitoring-condition1&lt;/condition&gt;
+                &lt;condition&gt;if-monitoring-condition4&lt;/condition&gt;
+                &lt;action&gt;
+                    &lt;name&gt;if-matched-statistics2&lt;/name&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;event-filter-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;increment-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;continue-check-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                &lt;/action&gt;
+            &lt;/condition-action&gt;
+            &lt;condition-action&gt;
+                &lt;name&gt;smart-filter3&lt;/name&gt;
+                &lt;condition&gt;if-monitoring-condition2&lt;/condition&gt;
+                &lt;action&gt;
+                    &lt;name&gt;if-matched-statistics3&lt;/name&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;decrement-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                    &lt;action-element&gt;
+                        &lt;name&gt;exit-action&lt;/name&gt;
+                    &lt;/action-element&gt;
+                &lt;/action&gt;
+            &lt;/condition-action&gt;
+        &lt;/eca&gt;
+    &lt;/ecas&gt;
+    &lt;eca-func-libs&gt;
+        &lt;eca-function&gt;
+            &lt;func-name&gt;filtered-event&lt;/func-name&gt;
+        &lt;/eca-function&gt;
+        &lt;eca-function&gt;
+            &lt;func-name&gt;increment-function&lt;/func-name&gt;
+        &lt;/eca-function&gt;
+        &lt;eca-function&gt;
+            &lt;func-name&gt;decrement-function&lt;/func-name&gt;
+        &lt;/eca-function&gt;
+        &lt;eca-function&gt;
+            &lt;func-name&gt;exit-function&lt;/func-name&gt;
+        &lt;/eca-function&gt;
+        &lt;eca-function&gt;
+            &lt;func-name&gt;match-function&lt;/func-name&gt;
+        &lt;/eca-function&gt;
+        &lt;eca-rpc&gt;
+            &lt;rpc-name&gt;event-duplication-suppress&lt;/rpc-name&gt;
+        &lt;/eca-rpc&gt;
+        &lt;eca-name&gt;interface-eca-handling&lt;/eca-name&gt;
+    &lt;/eca-func-libs&gt;
+&lt;/gnca&gt;</artwork>
       </figure>
 
       <t>In this example, the event name is set to
       'interface-self-monitoring', the event type is set to 'server-event',
       the function name of ECA function libraries is set to 'sustained-event',
-      the name of 'condition-action' is corresponding to standard function
-      call 'sustained-event'.</t>
+      'increment-function','decrement-function','match-function','exit-function'
+      the rpc name of ECA function libarries is set to
+      'event-duplication-suppress',the name of 'condition-action' is
+      corresponding to standard function calls described avove. The pseudo
+      code of ECA logic can be described as follows:<figure>
+          <artwork>count = 0;
+while { next-period = true}
+if(interface is down ) {
+      event= filtered event;
+      count++;
+      if(count &gt; 1){
+       suppress event;
+       next-period = true;
+       continue;
+     }else if( count &lt;= 1) {
+      next-period = true;
+      continue;
+     }
+   }else if ( interface is not down){
+     next-period = false;
+     count--;
+     exit;
+  }
+}</artwork>
+        </figure></t>
     </section>
 
     <section title="Changes between Revisions">
+      <t>v09 - v10<list style="symbols">
+          <t>Rewrite ECA Model Self Monitoring Usage Example;</t>
+
+          <t>Reintroduce iterate action, function call and rpc call action
+          type. These action types are exchanged between local client and the
+          server.</t>
+
+          <t>Move notification operation as separate notification since the
+          notification is exchange between the management system and the
+          server.</t>
+        </list></t>
+
       <t>v08 - v09<list style="symbols">
           <t>Add ECA function libraries list in the ECA model.</t>
 
